@@ -575,6 +575,7 @@ class MediaDownloader:
             progress_hook({"status": "finished"})
         title = bunker_res.page_title or filename
         return {
+            "_type": "video",
             "title": title,
             "ext": dest.suffix.lstrip(".") or "mp4",
             "_filename": str(dest),
@@ -872,7 +873,7 @@ class MediaDownloader:
     def _get_video_context(
         self, meta: dict
     ) -> tuple[float | None, int | float | None, int | float | None]:
-        if meta['_type'] == self._PLAYLIST_TYPE:
+        if meta.get('_type') == self._PLAYLIST_TYPE:
             if not len(meta['entries']):
                 raise ValueError(
                     'Item said to be downloaded but no entries to process.'
@@ -926,7 +927,7 @@ class MediaDownloader:
         return self._get_video_filepath(meta).rsplit('/', maxsplit=1)[-1]
 
     def _get_video_filepath(self, meta: dict) -> str:
-        if meta['_type'] == self._PLAYLIST_TYPE:
+        if meta.get('_type') == self._PLAYLIST_TYPE:
             requested_downloads: list[dict] = meta['entries'][0]['requested_downloads']
             requested_video = self._get_requested_video(requested_downloads)
         else:

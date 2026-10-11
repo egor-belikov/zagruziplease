@@ -88,11 +88,28 @@ class TaskRepository:
         await self._db.commit()
 
     async def save_as_failed(self, task: Task, error_message: str) -> None:
+        task_id = task.id  # read before a rollback expires the instance
         task.status = TaskStatus.FAILED
         task.error = error_message
         task.progress_snapshot = None
         task.progress_updated_at = None
-        await self._db.commit()
+        try:
+            await self._db.commit()
+        except Exception:
+            # Session may be left broken (e.g. an interrupted progress write);
+            # reset it and mark the task failed with a plain UPDATE.
+            await self._db.rollback()
+            await self._db.execute(
+                update(Task)
+                .where(Task.id == task_id)
+                .values(
+                    status=TaskStatus.FAILED,
+                    error=error_message,
+                    progress_snapshot=None,
+                    progress_updated_at=None,
+                )
+            )
+            await self._db.commit()
 
     async def reset_orphaned_processing_tasks(self, error_message: str) -> int:
         """Fail tasks left in PROCESSING by a worker process that died/was

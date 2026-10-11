@@ -51,6 +51,9 @@ class MediaService:
         self._ytdlp_segment_started: float = 0.0
         self._download_t0: float | None = None
         self._last_db_progress_write: float = 0.0
+        # Progress hooks schedule snapshot writes concurrently from the yt-dlp
+        # thread; one AsyncSession must not be used by overlapping coroutines.
+        self._db_lock = asyncio.Lock()
         self._publish_user_progress: bool = True
         self._final_progress_transcript: str = ''
         self._download_plan_lines: list[str] = []
@@ -264,7 +267,10 @@ class MediaService:
         if now - self._last_db_progress_write >= self._DB_PROGRESS_MIN_INTERVAL:
             self._last_db_progress_write = now
             try:
-                await self._repository.update_task_progress_snapshot(self._task.id, line)
+                async with self._db_lock:
+                    await self._repository.update_task_progress_snapshot(
+                        self._task.id, line
+                    )
             except Exception:
                 self._log.debug('progress_snapshot DB update failed', exc_info=True)
 
@@ -534,4 +540,7 @@ class MediaService:
         remove_dir(video.root_path)
 
     async def _handle_download_exception(self, err: Exception) -> None:
-        await self._repository.save_as_failed(task=self._task, error_message=str(err))
+        async with self._db_lock:
+            await self._repository.save_as_failed(
+                task=self._task, error_message=str(err)
+            )
