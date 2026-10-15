@@ -5,6 +5,7 @@ from pyrogram.errors import MessageIdInvalid, MessageNotModified
 from yt_shared.rabbit.rabbit_config import PROGRESS_QUEUE
 from yt_shared.schemas.progress import DownloadProgressPayload
 
+from bot.core.pulse import get_pulse_message, remember_pulse_message
 from bot.core.workers.abstract import AbstractDownloadResultWorker
 from bot.core.workers.enums import RabbitWorkerType
 
@@ -37,17 +38,7 @@ class ProgressDownloadResultWorker(AbstractDownloadResultWorker):
                 except Exception:
                     self._log.debug('Progress log edit failed', exc_info=True)
             if body.pulse_text:
-                try:
-                    await self._bot.send_message(
-                        chat_id=body.from_chat_id,
-                        text=body.pulse_text[:4090],
-                        parse_mode=ParseMode.HTML,
-                        reply_to_message_id=(
-                            body.pipeline_log_message_id or body.ack_message_id
-                        ),
-                    )
-                except Exception:
-                    self._log.debug('Progress pulse send failed', exc_info=True)
+                await self._upsert_pulse(body)
         else:
             url = html.escape(body.url[:220])
             if detail:
@@ -69,3 +60,32 @@ class ProgressDownloadResultWorker(AbstractDownloadResultWorker):
             except Exception:
                 self._log.debug('Progress edit failed', exc_info=True)
         return True
+
+    async def _upsert_pulse(self, body: DownloadProgressPayload) -> None:
+        """Один пульс на задачу: правим прежнее сообщение, новое — только если его нет."""
+        text = body.pulse_text[:4090]
+        existing = get_pulse_message(body.task_id)
+        if existing:
+            chat_id, message_id = existing
+            try:
+                await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=text,
+                    parse_mode=ParseMode.HTML,
+                )
+                return
+            except MessageNotModified:
+                return
+            except Exception:
+                self._log.debug('Progress pulse edit failed, sending new', exc_info=True)
+        try:
+            msg = await self._bot.send_message(
+                chat_id=body.from_chat_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=(body.pipeline_log_message_id or body.ack_message_id),
+            )
+            remember_pulse_message(body.task_id, body.from_chat_id, msg.id)
+        except Exception:
+            self._log.debug('Progress pulse send failed', exc_info=True)

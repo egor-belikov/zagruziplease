@@ -328,7 +328,8 @@ class MediaService:
         await self._finalize_current_phase()
         loop = asyncio.get_running_loop()
         last_ts = [0.0]
-        last_pulse = [0.0]
+        # Первый пульс — только через интервал: в самом начале там 0% и «Unknown B/s».
+        last_pulse = [time.monotonic()]
 
         def _done(f: asyncio.Future) -> None:
             try:

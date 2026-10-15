@@ -8,6 +8,7 @@ from yt_shared.schemas.error import ErrorDownloadGeneralPayload, ErrorDownloadPa
 
 from bot.core.config import settings
 from bot.core.handlers.abstract import AbstractDownloadHandler
+from bot.core.pulse import delete_pulse_message
 from bot.core.utils import split_telegram_message
 from bot.version import __version__
 
@@ -41,6 +42,7 @@ class ErrorDownloadHandler(AbstractDownloadHandler):
 
     async def handle(self) -> None:
         await self._delete_pipeline_log_message()
+        await delete_pulse_message(self._bot, self._body.task_id)
         self._send_error_text()
 
     async def _delete_pipeline_log_message(self) -> None:
