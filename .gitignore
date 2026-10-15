@@ -147,3 +147,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Секреты деплоя (не в git)
+envs/secrets.env
+proxy/

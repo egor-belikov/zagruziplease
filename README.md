@@ -1,6 +1,6 @@
 ## yt-dlp-bot - Video Download Telegram Bot
 
-Fork **zagruzisuka**: `https://github.com/egor-belikov/zagruzisuka` (private). Sync upstream: `git fetch upstream && git merge upstream/main`. Compose project name and container prefix: `zagruzisuka`.
+Fork **zagruziplease**: `https://github.com/egor-belikov/zagruziplease`. Sync upstream: `git fetch upstream && git merge upstream/main`. Compose project name and container prefix: `zagruziplease`. Deploy: [DEPLOY.md](DEPLOY.md).
 
 Simple and reliable self-hosted Video Download Telegram Bot.
 

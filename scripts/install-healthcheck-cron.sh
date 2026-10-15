@@ -3,9 +3,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CRON_LINE="*/5 * * * * cd $ROOT && bash $ROOT/scripts/healthcheck-stack.sh >> /var/log/zagruzisuka-healthcheck.log 2>&1"
+CRON_LINE="*/5 * * * * cd $ROOT && bash $ROOT/scripts/healthcheck-stack.sh >> /var/log/zagruziplease-healthcheck.log 2>&1"
 
-chmod +x "$ROOT/scripts/healthcheck-stack.sh" "$ROOT/scripts/refresh-wizard-proxy.sh"
+chmod +x "$ROOT/scripts/healthcheck-stack.sh"
 
 if crontab -l 2>/dev/null | grep -Fq 'healthcheck-stack.sh'; then
   echo "Cron entry already present"

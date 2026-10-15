@@ -1,0 +1,60 @@
+# fantasyvps: 1 vCPU, 2 ГБ RAM, рядом стек fantasy (fantasy-worker держит ~1.4 ГБ).
+# Жёсткие лимиты RAM и низкий приоритет CPU, чтобы загрузки не вытесняли fantasy.
+#
+# Запуск:
+#   docker compose -f docker-compose.yml -f docker-compose.fantasyvps.yml up -d
+# Сборка без перегруза:
+#   ./scripts/build-low-resource.sh
+#
+# cpu_shares ниже 1024 — при нехватке CPU планировщик отдаёт ядро другим контейнерам.
+
+services:
+  yt_api:
+    cpus: "0.5"
+    mem_limit: 256m
+    mem_reservation: 64m
+    cpu_shares: 200
+    pids_limit: 128
+    environment:
+      # Несколько uvicorn-воркеров не влезают в лимит RAM.
+      API_WORKERS: "1"
+
+  yt_bot:
+    cpus: "0.5"
+    mem_limit: 384m
+    mem_reservation: 64m
+    cpu_shares: 200
+    pids_limit: 256
+
+  yt_worker:
+    cpus: "0.8"
+    mem_limit: 768m
+    mem_reservation: 128m
+    cpu_shares: 128
+    pids_limit: 512
+    env_file:
+      - envs/common.env
+      - envs/secrets.env
+      - envs/worker.env
+      - envs/worker.fantasyvps.env
+
+  yt_postgres:
+    cpus: "0.5"
+    mem_limit: 256m
+    mem_reservation: 32m
+    cpu_shares: 300
+    pids_limit: 128
+
+  yt_rabbitmq:
+    cpus: "0.4"
+    mem_limit: 256m
+    mem_reservation: 64m
+    cpu_shares: 250
+    pids_limit: 256
+
+  yt_redis:
+    cpus: "0.2"
+    mem_limit: 64m
+    mem_reservation: 16m
+    cpu_shares: 200
+    pids_limit: 64

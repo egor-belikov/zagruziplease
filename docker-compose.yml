@@ -1,4 +1,4 @@
-name: zagruzisuka
+name: zagruziplease
 
 services:
   base-image:
@@ -9,16 +9,17 @@ services:
       mode: replicated
       replicas: 0
   yt_api:
-    container_name: zagruzisuka_api
+    container_name: zagruziplease_api
     build:
       context: .
       dockerfile: app_api/Dockerfile
     env_file:
       - envs/common.env
+      - envs/secrets.env
       - envs/api.env
     restart: unless-stopped
     ports:
-      - "1984:8000"
+      - "127.0.0.1:1984:8000"
     command: bash -c "python start.py && python main.py"
     depends_on:
       - yt_postgres
@@ -26,31 +27,32 @@ services:
       - yt_worker
       - yt_redis
   yt_bot:
-    container_name: zagruzisuka_bot
+    container_name: zagruziplease_bot
     build:
       context: .
       dockerfile: app_bot/Dockerfile
     env_file:
       - envs/common.env
+      - envs/secrets.env
       - envs/bot.env
     restart: unless-stopped
     command: >
       bash -c "python start.py && python main.py"
     depends_on:
-      - yt_proxy
       - yt_postgres
       - yt_rabbitmq
       - yt_worker
       - yt_api
     volumes:
-      - "shared-tmpfs:/tmp/download_tmpfs"
+      - "download_tmp:/tmp/download_tmpfs"
   yt_worker:
-    container_name: zagruzisuka_worker
+    container_name: zagruziplease_worker
     build:
       context: .
       dockerfile: app_worker/Dockerfile
     env_file:
       - envs/common.env
+      - envs/secrets.env
       - envs/worker.env
     restart: unless-stopped
     command: >
@@ -59,49 +61,32 @@ services:
       - yt_postgres
       - yt_rabbitmq
     volumes:
-      - "/data/downloads:/filestorage"
-      - "shared-tmpfs:/tmp/download_tmpfs"
+      - "filestorage:/filestorage"
+      - "download_tmp:/tmp/download_tmpfs"
   yt_postgres:
-    container_name: zagruzisuka_postgres
+    container_name: zagruziplease_postgres
     image: "postgres:15"
     env_file:
       - envs/common.env
+      - envs/secrets.env
     ports:
-      - "5435:5432"
+      - "127.0.0.1:5435:5432"
     restart: unless-stopped
     volumes:
       - pgdata:/var/lib/postgresql/data
   yt_rabbitmq:
     image: "rabbitmq:3.12-management-alpine"
-    container_name: zagruzisuka_rabbitmq
+    container_name: zagruziplease_rabbitmq
     ports:
-      - "25672:5672"
-      - "15672:15672"
+      - "127.0.0.1:15672:15672"
     restart: unless-stopped
   yt_redis:
     image: "redis:alpine"
-    container_name: zagruzisuka_redis
+    container_name: zagruziplease_redis
     restart: unless-stopped
-
-  yt_proxy:
-    image: metacubex/mihomo:latest
-    container_name: zagruzisuka_proxy
-    restart: unless-stopped
-    volumes:
-      - ./proxy/mihomo.yaml:/root/.config/mihomo/config.yaml
-      - ./proxy/providers:/root/.config/mihomo/providers
-      - ./proxy/ruleset:/root/.config/mihomo/ruleset
 
 volumes:
-  # Было COMPOSE_PROJECT_NAME=yt → том с данными Postgres на этом VPS называется yt_pgdata.
-  # На новом сервере: docker volume create yt_pgdata (или убери external и импортируй дамп).
   pgdata:
-    external: true
-    name: yt_pgdata
-  # Временные файлы yt-dlp (RAM). На egorvps держим ~2G под потолок ~1G на файл + фрагменты.
-  shared-tmpfs:
-    driver: local
-    driver_opts:
-      type: "tmpfs"
-      device: "tmpfs"
-      o: "size=2048m,uid=1000"
+  filestorage:
+  # Временные файлы yt-dlp — на диске, не tmpfs: на 2 ГБ RAM место под ролик в памяти не держим.
+  download_tmp:
