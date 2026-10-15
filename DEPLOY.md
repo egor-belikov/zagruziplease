@@ -1,6 +1,6 @@
 # Развёртывание zagruziplease на fantasyvps
 
-Сервер: `fantasyvps` (NL, 1 vCPU, 2 ГБ RAM), рядом стек **fantasy** — он важнее, поэтому у нас жёсткие лимиты и низкий `cpu_shares` (`docker-compose.fantasyvps.yml`). Каталог: `/root/my_projects/zagruziplease`. Бот работает через polling — вебхуков, доменов и nginx нет. Прокси не используется: сервер уже вне РФ, Telegram и yt-dlp ходят напрямую.
+Сервер: `fantasyvps` (NL, 1 vCPU, 2 ГБ RAM), рядом стек **fantasy** — он важнее, поэтому у нас жёсткие лимиты и низкий `cpu_shares` (`docker-compose.fantasyvps.yml`). Каталог: `/root/my_projects/zagruziplease`. Бот `@zagruzipleasebot` работает через polling — вебхуков, доменов и nginx нет. Прокси не используется: сервер уже вне РФ, Telegram и yt-dlp ходят напрямую.
 
 ## Обычный деплой
 
@@ -61,4 +61,4 @@ docker exec zagruziplease_postgres pg_dump -U yt -Fc yt > zagruziplease-$(date +
 
 ## История
 
-До 15.10.2026 проект назывался **zagruzisuka** и жил на egorvps (рядом kinodolgoletie, mihomo-прокси для обхода блокировок). Username бота `@zagruzisukabot` сменить нельзя.
+До 15.10.2026 проект назывался **zagruzisuka** и жил на egorvps (рядом kinodolgoletie, mihomo-прокси для обхода блокировок). Старый бот `@zagruzisukabot` заменён новым — `@zagruzipleasebot` (тот же код, новый токен в `app_bot/config.yml`).
