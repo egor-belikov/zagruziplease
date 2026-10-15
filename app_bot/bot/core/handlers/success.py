@@ -14,7 +14,6 @@ from yt_shared.utils.file import list_files_human, remove_dir
 from yt_shared.utils.tasks.tasks import create_task
 
 from bot.core.handlers.abstract import AbstractDownloadHandler
-from bot.core.pulse import delete_pulse_message
 from bot.core.tasks.upload import AbstractUploadTask, AudioUploadTask, VideoUploadTask
 from bot.core.utils import bold, is_user_upload_silent
 
@@ -46,7 +45,6 @@ class SuccessDownloadHandler(AbstractDownloadHandler):
             await asyncio.gather(*coro_tasks)
         finally:
             await self._delete_acknowledgment_message()
-            await delete_pulse_message(self._bot, self._body.task_id)
 
     async def _delete_acknowledgment_message(self) -> None:
         if self._body.from_chat_id and self._body.context.ack_message_id:

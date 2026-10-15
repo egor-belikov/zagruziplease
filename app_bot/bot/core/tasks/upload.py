@@ -78,6 +78,9 @@ class AbstractUploadTask(AbstractTask, ABC):
         self._cached_message: Message | None = None
 
         self._upload_status_by_chat: dict[int, int] = {}
+        # Чаты, где статус загрузки дописывается в «Лог скачивания и обработки»,
+        # а не отдельным сообщением.
+        self._log_merged_chats: set[int] = set()
         self._upload_line_last_edit: float = 0.0
         self._upload_line_ref_bytes: int = 0
         self._upload_line_ref_mono: float = 0.0
@@ -114,6 +117,26 @@ class AbstractUploadTask(AbstractTask, ABC):
             f'📏 <b>Размер</b> {size_h}'
         )
 
+    def _pipeline_log_message_id(self, chat_id: int) -> int | None:
+        """Сообщение с логом скачивания в чате заказчика — туда дописываем загрузку."""
+        mid = self._ctx.context.pipeline_log_message_id
+        if mid and self._ctx.from_chat_id == chat_id:
+            return mid
+        return None
+
+    def _upload_status_html(self, chat_id: int, line: str) -> str:
+        status = f'{self._upload_status_intro_html()}\n<pre>{html.escape(line)}</pre>'
+        if chat_id not in self._log_merged_chats:
+            return status
+        log = (self._ctx.progress_log or '').strip()
+        if not log:
+            return status
+        return (
+            '<b>Лог скачивания и обработки</b>\n'
+            f'<pre>{html.escape(log[:3400])}</pre>\n\n'
+            f'{status}'
+        )
+
     async def _send_upload_text(self) -> dict[int, int]:
         """One status message per recipient chat; edited later with byte progress."""
         initial = (
@@ -123,6 +146,22 @@ class AbstractUploadTask(AbstractTask, ABC):
         out: dict[int, int] = {}
         for user in self._users:
             if is_user_upload_silent(user=user, conf=self._bot.conf):
+                continue
+            log_mid = self._pipeline_log_message_id(user.id)
+            if log_mid:
+                self._log_merged_chats.add(user.id)
+                out[user.id] = log_mid
+                try:
+                    await self._bot.edit_message_text(
+                        chat_id=user.id,
+                        message_id=log_mid,
+                        text=self._upload_status_html(user.id, 'подключение…')[:4090],
+                        parse_mode=ParseMode.HTML,
+                    )
+                except MessageNotModified:
+                    pass
+                except Exception:
+                    self._log.debug('Upload status edit of pipeline log failed', exc_info=True)
                 continue
             kwargs: dict = {
                 'chat_id': user.id,
@@ -241,7 +280,7 @@ class AbstractUploadTask(AbstractTask, ABC):
                 f'{line} · всего: '
                 f'{self._format_upload_session_total(total_elapsed)}'
             )
-        text = f'{self._upload_status_intro_html()}\n<pre>{html.escape(line)}</pre>'
+        text = self._upload_status_html(chat_id, line)
         try:
             await self._bot.edit_message_text(
                 chat_id=chat_id,
