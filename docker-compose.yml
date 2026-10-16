@@ -79,6 +79,8 @@ services:
     container_name: zagruziplease_rabbitmq
     ports:
       - "127.0.0.1:15672:15672"
+    volumes:
+      - "./rabbitmq/conf.d/20-consumer-timeout.conf:/etc/rabbitmq/conf.d/20-consumer-timeout.conf:ro"
     restart: unless-stopped
   yt_redis:
     image: "redis:alpine"

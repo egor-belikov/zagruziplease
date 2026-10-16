@@ -503,7 +503,10 @@ class MediaDownloader:
             for proxy in _bunkr_download_proxy_chain():
                 # Partial data from another path may be unusable; start clean.
                 dest.unlink(missing_ok=True)
-                for attempt in range(1, _BUNKR_ATTEMPTS_PER_PATH + 1):
+                attempt = 0
+                while attempt < _BUNKR_ATTEMPTS_PER_PATH:
+                    attempt += 1
+                    before = dest.stat().st_size if dest.exists() else 0
                     try:
                         size = _http_download_to_file(
                             bunker_res.direct_url,
@@ -523,6 +526,10 @@ class MediaDownloader:
                             break
                     except (YtdlpRequestError, OSError) as err:
                         last_err = err
+                        if dest.exists() and dest.stat().st_size > before:
+                            # CDN dropped the connection but data arrived: resume
+                            # without spending an attempt (slow CDNs cut every ~15 min).
+                            attempt = 0
                     self._log.warning(
                         'Bunkr CDN attempt %s/%s via proxy=%s failed: %s',
                         attempt,
@@ -539,14 +546,17 @@ class MediaDownloader:
             if last_err is not None:
                 raise last_err
         except _BunkrHttpError as err:
+            if err.status == 403:
+                hint = (
+                    "CDN Bunkr блокирует IP сервера. Экспортируй cookies из браузера "
+                    "на ПК (где Bunkr открывается) в /app/cookies/cookies.txt "
+                    "или укажи residential BUNKR_CDN_PROXY."
+                )
+            else:
+                hint = "CDN Bunkr временно недоступен или перегружен — попробуй позже."
             raise MediaDownloaderError(
                 format_download_failure(
-                    reason=(
-                        f"Bunkr CDN HTTP {err.status}: {err.reason}. "
-                        "CDN prxp-b.cdn.cr блокирует IP датацентра (VPS и Wizard VPN). "
-                        "Экспортируй cookies из браузера на ПК (где Bunkr открывается) "
-                        "в /app/cookies/cookies.txt или укажи residential BUNKR_CDN_PROXY."
-                    ),
+                    reason=f"Bunkr CDN HTTP {err.status}: {err.reason}. {hint}",
                     url=url,
                     resolved_url=bunker_res.direct_url,
                 )
@@ -555,9 +565,9 @@ class MediaDownloader:
             raise MediaDownloaderError(
                 format_download_failure(
                     reason=(
-                        f"{err}. Bunkr CDN обрывает соединение по всем путям "
-                        "(direct/прокси). Похоже на блокировку IP датацентра — "
-                        "укажи residential BUNKR_CDN_PROXY (socks5h://…)."
+                        f"{err}. Bunkr CDN обрывает соединение и не отдаёт данные "
+                        "по всем путям (direct/прокси) — попробуй позже или укажи "
+                        "residential BUNKR_CDN_PROXY (socks5h://…)."
                     ),
                     url=url,
                     resolved_url=bunker_res.direct_url,

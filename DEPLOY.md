@@ -30,7 +30,7 @@ docker compose -f docker-compose.yml -f docker-compose.fantasyvps.yml up -d
 | `zagruziplease_filestorage` | `/filestorage` воркера (обычно пусто: бот шлёт `save_to_storage=False`) |
 | `zagruziplease_download_tmp` | Временные файлы yt-dlp — на диске, не tmpfs (RAM мало) |
 
-Rabbitmq и redis — без ценных данных. Бэкап БД:
+Rabbitmq и redis — без ценных данных. У RabbitMQ `consumer_timeout` поднят до 6 ч (`rabbitmq/conf.d/`): воркер подтверждает задачу только после загрузки, и при стандартных 30 мин долгие загрузки запускались повторно. Бэкап БД:
 
 ```bash
 docker exec zagruziplease_postgres pg_dump -U yt -Fc yt > zagruziplease-$(date +%F).dump
