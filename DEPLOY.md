@@ -59,8 +59,10 @@ docker exec zagruziplease_postgres pg_dump -U yt -Fc yt > zagruziplease-$(date +
 
 Часть русских сайтов отдаёт видео только на российские IP. На egorvps (RU, 95.181.212.42) крутится SOCKS5 `gost` — `/root/ruproxy/docker-compose.yml`, порт 18443, логин/пароль в `RU_PROXY` (`envs/secrets.env`). Порт открыт только для IP fantasyvps: правила `DOCKER-USER` восстанавливает `ruproxy-firewall.service`.
 
-- Через прокси идут только хосты из `worker/ru_proxy.py` (matchtv.ru, smotrim.ru, 1tv.ru, ntv.ru, sportbox.ru) и `RU_PROXY_HOSTS`, остальное — напрямую.
+- Через прокси идут только хосты из `worker/ru_proxy.py` (matchtv.ru, 1tv.ru, sportbox.ru) и `RU_PROXY_HOSTS`, остальное — напрямую.
+- Проверено 19.10.2026 из NL напрямую, без прокси: rutube, НТВ, Пятый, smotrim, dzen. Яндекс Музыка (сломан экстрактор, нужна авторизация) и ivi (DRM) не качаются ни так, ни через прокси.
 - Матч ТВ (`matchtv.ru/…matchtvvideo_…`) и Sportbox (`…sportbox.ru/…spbvideo_…`, тот же плеер): `worker/matchtv_resolver.py` достаёт из страницы плеер Webcaster и через прокси получает HLS-плейлист с `bl.video.matchtv.ru`.
+- Smotrim (`smotrim.ru/video/…`): экстрактор yt-dlp сломан (сайт переехал на SPA) — `worker/smotrim_resolver.py` берёт HLS из `player-api.smotrim.ru/api/v1/video/<id>`. Платные видео — понятная ошибка «доступно только по подписке».
 
 ## VK Музыка
 

@@ -24,6 +24,7 @@ from yt_shared.utils.file import file_size, list_files_human, remove_dir
 from worker.bunkr_resolver import resolve_if_bunkr
 from worker.matchtv_resolver import resolve_if_matchtv
 from worker.ru_proxy import ru_proxy_for
+from worker.smotrim_resolver import resolve_if_smotrim
 from worker.sports_ru_resolver import resolve_if_sports_ru
 from worker.veed_resolver import resolve_if_veed
 from worker.vk_music_resolver import resolve_if_vk_audio
@@ -627,6 +628,7 @@ class MediaDownloader:
         veed_res = resolve_if_veed(url, self._log)
         sports_ru_res = resolve_if_sports_ru(url, self._log)
         matchtv_res = resolve_if_matchtv(url, self._log)
+        smotrim_res = resolve_if_smotrim(url, self._log)
         vk_res = resolve_if_vk_audio(url, self._log)
         resolved_url = url
         try:
@@ -645,6 +647,9 @@ class MediaDownloader:
         elif matchtv_res is not None:
             resolved_url = matchtv_res.direct_url
             self._log.info('Match TV page %s resolved to HLS playlist URL', url)
+        elif smotrim_res is not None:
+            resolved_url = smotrim_res.direct_url
+            self._log.info('Smotrim page %s resolved to HLS playlist URL', url)
         elif vk_res is not None:
             resolved_url = vk_res.direct_url
             self._log.info('VK audio %s resolved to stream URL', url)
@@ -677,12 +682,12 @@ class MediaDownloader:
                 hdrs = dict(opts.get('http_headers') or {})
                 hdrs.update(sports_ru_res.http_headers)
                 opts['http_headers'] = hdrs
-            elif matchtv_res is not None:
+            elif (page_res := matchtv_res or smotrim_res) is not None:
                 hdrs = dict(opts.get('http_headers') or {})
-                hdrs.update(matchtv_res.http_headers)
+                hdrs.update(page_res.http_headers)
                 opts['http_headers'] = hdrs
-                if matchtv_res.page_title:
-                    name = sanitize_filename(matchtv_res.page_title, restricted=True)
+                if page_res.page_title:
+                    name = sanitize_filename(page_res.page_title, restricted=True)
                     opts['outtmpl'] = {
                         **opts['outtmpl'],
                         'default': str(curr_tmp_dir / f'{name[:150].replace("%", "%%")}.%(ext)s'),
@@ -794,6 +799,8 @@ class MediaDownloader:
                         meta['title'] = sports_ru_res.page_title
                     elif matchtv_res is not None and matchtv_res.page_title:
                         meta['title'] = matchtv_res.page_title
+                    elif smotrim_res is not None and smotrim_res.page_title:
+                        meta['title'] = smotrim_res.page_title
                     elif vk_res is not None:
                         meta['title'] = vk_res.full_title
                         meta['duration'] = vk_res.duration

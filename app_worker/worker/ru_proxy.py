@@ -13,9 +13,7 @@ from urllib.parse import urlsplit
 _RU_GEO_HOST_SUFFIXES: frozenset[str] = frozenset(
     (
         'matchtv.ru',
-        'smotrim.ru',
         '1tv.ru',
-        'ntv.ru',
         'sportbox.ru',
     )
 )
