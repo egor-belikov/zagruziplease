@@ -3,6 +3,7 @@ import traceback
 
 from yt_dlp import version as ytdlp_version
 from yt_shared.db.session import get_db
+from yt_shared.enums import DownMediaType
 from yt_shared.models import Task
 from yt_shared.rabbit.publisher import RmqPublisher
 from yt_shared.repositories.task import TaskRepository
@@ -17,6 +18,11 @@ from worker.bunkr_resolver import (
 from worker.core.downloader import MediaDownloader
 from worker.core.exceptions import DownloadVideoServiceError, GeneralVideoServiceError
 from worker.core.media_service import MediaService
+from worker.vk_music_resolver import (
+    is_vk_music_url,
+    is_vk_playlist_url,
+    list_vk_playlist_track_urls,
+)
 
 
 class InboundPayloadHandler:
@@ -60,6 +66,32 @@ class InboundPayloadHandler:
             update={'url': file_urls[0], 'original_url': file_urls[0]}
         )
 
+    async def _maybe_expand_vk_playlist(
+        self, media_payload: InbMediaPayload
+    ) -> InbMediaPayload:
+        if not is_vk_music_url(media_payload.url):
+            return media_payload
+        media_payload = media_payload.model_copy(
+            update={'download_media_type': DownMediaType.AUDIO}
+        )
+        if not is_vk_playlist_url(media_payload.url):
+            return media_payload
+        track_urls = list_vk_playlist_track_urls(media_payload.url, self._log)
+        for extra_url in track_urls[1:]:
+            extra = media_payload.model_copy(
+                update={
+                    'url': extra_url,
+                    'original_url': extra_url,
+                    'ack_message_id': None,
+                    'pipeline_log_message_id': None,
+                }
+            )
+            await self._rmq_publisher.send_for_download(extra)
+        self._log.info('VK playlist expanded to %s track task(s)', len(track_urls))
+        return media_payload.model_copy(
+            update={'url': track_urls[0], 'original_url': track_urls[0]}
+        )
+
     async def _handle(self, media_payload: InbMediaPayload) -> None:
         """Process the media payload and handle any errors.
 
@@ -68,6 +100,7 @@ class InboundPayloadHandler:
 
         """
         media_payload = await self._maybe_expand_bunkr_album(media_payload)
+        media_payload = await self._maybe_expand_vk_playlist(media_payload)
         async for session in get_db():
             media_service = MediaService(
                 media_payload=media_payload,

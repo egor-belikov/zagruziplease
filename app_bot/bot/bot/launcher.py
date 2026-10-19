@@ -13,6 +13,8 @@ from bot.bot.client import VideoBotClient
 from bot.core.callbacks import TelegramCallback
 from bot.core.constants import SUPERADMIN_RESTART_NOTIFY_USER_ID
 from bot.core.config.config import get_main_config
+from bot.core import music_search
+from bot.core.music_search import MusicSearch
 from bot.core.quality import CALLBACK_REGEX, QualityPicker
 from bot.core.tasks.connection_watchdog import ConnectionWatchdogTask
 from bot.core.tasks.db_cleanup import DbCleanupTask
@@ -61,11 +63,28 @@ class BotLauncher:
     def _setup_handlers(self) -> None:
         quality_picker = QualityPicker(client=self._bot)
         cb = TelegramCallback(quality_picker=quality_picker)
+        music = MusicSearch(quality_picker=quality_picker)
 
         self._bot.add_handler(
             CallbackQueryHandler(
                 quality_picker.on_callback,
                 filters=filters.regex(CALLBACK_REGEX),
+            )
+        )
+
+        self._bot.add_handler(
+            CallbackQueryHandler(
+                music.on_callback,
+                filters=filters.regex(music_search.CALLBACK_REGEX),
+            )
+        )
+        self._bot.add_handler(
+            MessageHandler(music.on_search, filters=filters.command('music'))
+        )
+        self._bot.add_handler(
+            MessageHandler(
+                music.on_download,
+                filters=filters.regex(music_search.DOWNLOAD_REGEX),
             )
         )
 

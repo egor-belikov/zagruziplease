@@ -42,7 +42,7 @@ docker exec zagruziplease_postgres pg_dump -U yt -Fc yt > zagruziplease-$(date +
 
 - **Один файл** yt-dlp: до ~1 GiB (`YTDLP_MAX_FILESIZE_BYTES` в `envs/worker.fantasyvps.env`; `0` — без лимита).
 - **Одна загрузка** за раз (`MAX_SIMULTANEOUS_DOWNLOADS=1`).
-- **Длинные видео** (≥ 600 с) — ~360p: `YTDLP_LONG_VIDEO_SECONDS`, `YTDLP_LONG_VIDEO_FORMAT`; отключить: `YTDLP_LONG_VIDEO_SECONDS=0`.
+- **Качество видео** выбирается кнопками в боте (360p / 480p / 720p / 1080p / лучшее / только звук; без выбора через 30 с — 1080p). Лимит файла — 2000 MiB (`YTDLP_MAX_FILESIZE_BYTES`). Принудительный ~360p для длинных роликов теперь только для задач без выбора (API) и по умолчанию выключен: `YTDLP_LONG_VIDEO_SECONDS=600`, `YTDLP_LONG_VIDEO_FORMAT`.
 - **RAM/CPU** — `docker-compose.fantasyvps.yml` (`mem_limit`, `cpus`, `cpu_shares`).
 
 ## Healthcheck
@@ -54,6 +54,15 @@ docker exec zagruziplease_postgres pg_dump -U yt -Fc yt > zagruziplease-$(date +
 - Отдельная стадия перед yt-dlp: разбор страницы вида `https://bunkr.<tld>/f/…` (и `/v/`, `/i/`, `/d/`), вызов официального Bunkr API (`apidl.bunkr.ru`) и скачивание уже **прямой** ссылки через yt-dlp.
 - Поддерживаются все известные домены из gallery-dl (`bunkr.si`, `.fi`, `.sk`, `.black`, …) плюс любой `bunkr+.<tld>` по шаблону; при ошибке на одном зеркале воркер перебирает другие.
 - CDN Bunkr блокирует IP датацентров — при необходимости residential `BUNKR_CDN_PROXY=socks5h://…` в `envs/worker.fantasyvps.env`.
+
+## VK Музыка
+
+Публичного API для музыки у ВК нет, а токены из `oauth.vk.com/authorize` на `audio.*` отвечают «Unknown method». Поэтому бот и воркер притворяются веб-версией ВК: по кукам сессии (`remixsid` и `p`) получают на `login.vk.ru` токен веб-клиента (живёт около часа, обновляется сам), см. `yt_shared/vk_music.py`.
+
+- Куки: залогиниться в ВК в браузере, закрыть браузер, запустить локально `python scripts/vk_music_cookies.py` (по умолчанию Яндекс Браузер; путь к профилю и браузер можно передать аргументами). Скрипт проверит поиск и запишет `VK_MUSIC_COOKIES=...` в `envs/secrets.env` — эту строку скопировать в `envs/secrets.env` на сервере и перезапустить `yt_bot` и `yt_worker`.
+- Если ВК пишет «сессия недействительна» — сессию разлогинили (выход из ВК в браузере, «Завершить все сеансы», смена пароля). Повторить шаг с куками.
+- Ссылка на плейлист (`vk.com/audio_playlist…`, `vk.com/music/playlist/…`) раскладывается на отдельные задачи по трекам, максимум `VK_MUSIC_MAX_TRACKS` (по умолчанию 200). Ссылки ВК всегда качаются как mp3, качество видео не спрашивается.
+- `/music название` — поиск, 10 треков на страницу, сортировка по релевантности или длине, `/musicN` скачивает трек N из последнего поиска в этом чате.
 
 ## Удаление после отправки в Telegram
 

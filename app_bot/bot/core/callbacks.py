@@ -5,7 +5,9 @@ from pyrogram.enums import ParseMode
 from pyrogram.errors import FloodWait, MessageIdInvalid, MessageNotModified
 from pyrogram.types import Message
 from yt_shared.emoji import SUCCESS_EMOJI
+from yt_shared.enums import DownMediaType
 from yt_shared.utils.tasks.tasks import create_task as bg_create_task
+from yt_shared.vk_music import is_vk_music_url
 
 from bot.bot.client import VideoBotClient
 from bot.core.quality import (
@@ -33,7 +35,8 @@ class TelegramCallback:
     @staticmethod
     async def on_start(client: VideoBotClient, message: Message) -> None:  # noqa: ARG004
         await message.reply(
-            bold('Send video URL to start processing'),
+            f'{bold("Send video URL to start processing")}\n'
+            '🎵 Поиск музыки ВК: /music название песни',
             parse_mode=ParseMode.HTML,
             reply_to_message_id=message.id,
         )
@@ -133,6 +136,9 @@ class TelegramCallback:
         url_objects = self._url_parser.parse_urls(urls=urls, context=context)
         picker = self._quality_picker
         for u in url_objects:
+            if is_vk_music_url(u.url):
+                # VK Music is audio only: no quality prompt.
+                u = u.model_copy(update={'download_media_type': DownMediaType.AUDIO})
             if needs_quality_choice(u):
                 token = picker.new_token()
                 log_msg = await message.reply(

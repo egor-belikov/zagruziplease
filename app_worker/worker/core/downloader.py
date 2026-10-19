@@ -15,7 +15,7 @@ import yt_dlp
 from yt_dlp.networking import Request as YtdlpRequest
 from yt_dlp.networking.exceptions import HTTPError as YtdlpHTTPError
 from yt_dlp.networking.exceptions import RequestError as YtdlpRequestError
-from yt_dlp.utils import DownloadError
+from yt_dlp.utils import DownloadError, sanitize_filename
 from yt_shared.enums import DownMediaType, VideoQuality
 from yt_shared.schemas.media import Audio, DownMedia, InbMediaPayload, Video
 from yt_shared.utils.common import format_bytes, gen_random_str
@@ -24,6 +24,7 @@ from yt_shared.utils.file import file_size, list_files_human, remove_dir
 from worker.bunkr_resolver import resolve_if_bunkr
 from worker.sports_ru_resolver import resolve_if_sports_ru
 from worker.veed_resolver import resolve_if_veed
+from worker.vk_music_resolver import resolve_if_vk_audio
 from worker.core.config import settings
 from worker.core.download_errors import format_download_failure
 from worker.core.exceptions import MediaDownloaderError
@@ -623,6 +624,7 @@ class MediaDownloader:
         bunker_res = resolve_if_bunkr(url, self._log)
         veed_res = resolve_if_veed(url, self._log)
         sports_ru_res = resolve_if_sports_ru(url, self._log)
+        vk_res = resolve_if_vk_audio(url, self._log)
         resolved_url = url
         try:
             resolved_url = _resolve_streamff_direct_url(url)
@@ -637,6 +639,9 @@ class MediaDownloader:
         elif sports_ru_res is not None:
             resolved_url = sports_ru_res.direct_url
             self._log.info('Sports.ru page %s resolved to HLS playlist URL', url)
+        elif vk_res is not None:
+            resolved_url = vk_res.direct_url
+            self._log.info('VK audio %s resolved to stream URL', url)
         elif resolved_url != url:
             self._log.info('Resolved %s to direct URL %s', url, resolved_url)
         self._log.info('Downloading %s, media_type %s', url, media_type)
@@ -663,6 +668,16 @@ class MediaDownloader:
                 hdrs = dict(opts.get('http_headers') or {})
                 hdrs.update(sports_ru_res.http_headers)
                 opts['http_headers'] = hdrs
+            elif vk_res is not None:
+                hdrs = dict(opts.get('http_headers') or {})
+                hdrs.update(vk_res.http_headers)
+                opts['http_headers'] = hdrs
+                # Generic extractor would name the file "index"; use "Artist - Title".
+                name = sanitize_filename(vk_res.full_title)[:200].replace('%', '%%')
+                opts['outtmpl'] = {
+                    **opts['outtmpl'],
+                    'default': str(curr_tmp_dir / f'{name}.%(ext)s'),
+                }
 
             hooks = list(opts.get('progress_hooks') or [])
             if progress_hook:
@@ -758,6 +773,9 @@ class MediaDownloader:
                         meta['title'] = veed_res.page_title
                     elif sports_ru_res is not None and sports_ru_res.page_title:
                         meta['title'] = sports_ru_res.page_title
+                    elif vk_res is not None:
+                        meta['title'] = vk_res.full_title
+                        meta['duration'] = vk_res.duration
 
                     meta_sanitized = ytdl.sanitize_info(meta)
 
@@ -895,7 +913,7 @@ class MediaDownloader:
         return Audio(
             title=meta['title'],
             original_filename=audio_filename,
-            duration=None,
+            duration=float(meta['duration']) if meta.get('duration') else None,
             directory_path=destination_dir,
             file_size=file_size(destination_dir / audio_filename),
         )
