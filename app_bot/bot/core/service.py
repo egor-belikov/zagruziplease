@@ -36,6 +36,7 @@ class UrlService:
             source=TaskSource.BOT,
             save_to_storage=False,
             download_media_type=url.download_media_type,
+            video_quality=url.video_quality,
             custom_filename=None,
             automatic_extension=False,
         )

@@ -5,19 +5,17 @@ from pyrogram.enums import ParseMode
 from pyrogram.errors import FloodWait, MessageIdInvalid, MessageNotModified
 from pyrogram.types import Message
 from yt_shared.emoji import SUCCESS_EMOJI
-from yt_shared.schemas.url import URL
 from yt_shared.utils.tasks.tasks import create_task as bg_create_task
 
-from urllib.parse import urlsplit
-
 from bot.bot.client import VideoBotClient
-
-
-def _is_rutube_url(url: str) -> bool:
-    host = (urlsplit(url).hostname or '').lower()
-    return host == 'rutube.ru' or host.endswith('.rutube.ru')
-from bot.core.queue_status import build_queue_dashboard, download_workflow_backlog_count
-from bot.core.service import UrlParser, UrlService
+from bot.core.quality import (
+    QualityPicker,
+    choice_prompt_html,
+    needs_quality_choice,
+    queued_log_html,
+)
+from bot.core.queue_status import build_queue_dashboard
+from bot.core.service import UrlParser
 from bot.core.utils import bold, get_user_id
 
 
@@ -27,10 +25,10 @@ class TelegramCallback:
     )
     _MSG_SEND_FAIL: str = f'🛑 {bold("Failed to send URL for download")}'
 
-    def __init__(self) -> None:
+    def __init__(self, quality_picker: QualityPicker) -> None:
         self._log = logging.getLogger(self.__class__.__name__)
         self._url_parser = UrlParser()
-        self._url_service = UrlService()
+        self._quality_picker = quality_picker
 
     @staticmethod
     async def on_start(client: VideoBotClient, message: Message) -> None:  # noqa: ARG004
@@ -130,36 +128,38 @@ class TelegramCallback:
         ack_message = await self._send_acknowledge_message(
             message=message, url_count=len(urls)
         )
+        ack_text = self._format_acknowledge_text(len(urls))
         context = {'message': message, 'user': user, 'ack_message': ack_message}
         url_objects = self._url_parser.parse_urls(urls=urls, context=context)
-        enriched_urls: list[URL] = []
+        picker = self._quality_picker
         for u in url_objects:
-            if _is_rutube_url(u.url):
-                log_pre = '📺 Rutube: определяю длительность и качество…'
-            else:
-                log_pre = '⏳ Журнал обновляется по этапам…'
+            if needs_quality_choice(u):
+                token = picker.new_token()
+                log_msg = await message.reply(
+                    text=choice_prompt_html(),
+                    parse_mode=ParseMode.HTML,
+                    reply_to_message_id=message.id,
+                    reply_markup=picker.keyboard_for(token),
+                )
+                picker.register(
+                    token=token,
+                    url=u.model_copy(update={'pipeline_log_message_id': log_msg.id}),
+                    chat_id=message.chat.id,
+                    ack_message=ack_message,
+                    ack_text=ack_text,
+                )
+                continue
             log_msg = await message.reply(
-                text=(
-                    '<b>Лог скачивания и обработки</b>\n'
-                    f'<pre>{log_pre}</pre>'
-                ),
+                text=queued_log_html(u),
                 parse_mode=ParseMode.HTML,
                 reply_to_message_id=message.id,
             )
-            enriched_urls.append(
-                u.model_copy(update={'pipeline_log_message_id': log_msg.id})
+            await picker.dispatch(
+                url=u.model_copy(update={'pipeline_log_message_id': log_msg.id}),
+                chat_id=message.chat.id,
+                ack_message_id=ack_message.id,
+                ack_text=ack_text,
             )
-        await self._url_service.process_urls(enriched_urls)
-        if enriched_urls:
-            try:
-                n = await download_workflow_backlog_count()
-                base = self._format_acknowledge_text(len(enriched_urls))
-                await ack_message.edit_text(
-                    text=f'{base}\n\n📊 <b>Очередь</b>: сейчас ~{n} задач(и) впереди (включая эту)',
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception:
-                self._log.exception('Failed to update queue hint on ack message')
 
     async def _send_acknowledge_message(
         self, message: Message, url_count: int

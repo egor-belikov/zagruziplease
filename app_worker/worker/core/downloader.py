@@ -16,7 +16,7 @@ from yt_dlp.networking import Request as YtdlpRequest
 from yt_dlp.networking.exceptions import HTTPError as YtdlpHTTPError
 from yt_dlp.networking.exceptions import RequestError as YtdlpRequestError
 from yt_dlp.utils import DownloadError
-from yt_shared.enums import DownMediaType
+from yt_shared.enums import DownMediaType, VideoQuality
 from yt_shared.schemas.media import Audio, DownMedia, InbMediaPayload, Video
 from yt_shared.utils.common import format_bytes, gen_random_str
 from yt_shared.utils.file import file_size, list_files_human, remove_dir
@@ -34,9 +34,9 @@ try:
 except ImportError:
     from ytdl_opts.default import FINAL_AUDIO_FORMAT, FINAL_THUMBNAIL_FORMAT
 
-_DEFAULT_MAX_FILESIZE = (
-    1024 * 1024 * 1024
-)  # 1 GiB; env YTDLP_MAX_FILESIZE_BYTES или 0 = без лимита
+# 2000 MiB — потолок загрузки файла ботом в Telegram (4000 частей по 512 KiB).
+# env YTDLP_MAX_FILESIZE_BYTES или 0 = без лимита
+_DEFAULT_MAX_FILESIZE = 2000 * 1024 * 1024
 _DEFAULT_SOCKET_TIMEOUT = 120
 _DEFAULT_RETRIES = 15
 _DEFAULT_FRAGMENT_RETRIES = 50
@@ -165,16 +165,18 @@ def _first_env_proxy() -> str | None:
 
 
 def _long_video_threshold_seconds() -> float | None:
-    """Порог длительности (сек): дольше — качаем в низком качестве. Отключить: 0/off/never."""
+    """Порог длительности (сек): дольше — качаем в низком качестве.
+
+    По умолчанию выключено: качество выбирает пользователь кнопками в боте.
+    Применяется только к задачам без выбранного качества (например, из API).
+    """
     raw = (os.environ.get('YTDLP_LONG_VIDEO_SECONDS') or '').strip().lower()
-    if raw in ('0', 'off', 'never', 'false', '-1'):
+    if not raw or raw in ('0', 'off', 'never', 'false', '-1'):
         return None
-    if not raw:
-        return 600.0
     try:
         t = float(raw)
     except ValueError:
-        return 600.0
+        return None
     return t if t > 0 else None
 
 
@@ -185,6 +187,21 @@ def _long_video_format_string() -> str:
     return (
         'bestvideo*[height<=360][fps<=30]+bestaudio/bestaudio+bestvideo*[height<=360]/'
         'best[height<=360]/worst'
+    )
+
+
+def _video_quality_format_string(quality: VideoQuality) -> str | None:
+    """yt-dlp format для выбранного качества; None — оставить формат хоста."""
+    if quality is VideoQuality.BEST:
+        return None
+    h = int(quality.value)
+    # `<=?` пропускает форматы без известной высоты (прямые файлы, часть HLS).
+    # Если всё выше лимита — берём самое низкое из доступного.
+    return (
+        f'bv*[height<=?{h}][ext=mp4]+ba[ext=m4a]/'
+        f'bv*[height<=?{h}]+ba/'
+        f'b[height<=?{h}]/'
+        'wv*+ba/w'
     )
 
 
@@ -654,10 +671,23 @@ class MediaDownloader:
 
             probe_meta: dict | None = None
             low_format = False
+            quality = media_payload.video_quality
             if media_type in (DownMediaType.VIDEO, DownMediaType.AUDIO_VIDEO):
-                probe_meta, low_format = self._maybe_apply_long_video_low_format(
-                    opts, resolved_url
-                )
+                if quality is None:
+                    probe_meta, low_format = self._maybe_apply_long_video_low_format(
+                        opts, resolved_url
+                    )
+                else:
+                    if fmt := _video_quality_format_string(quality):
+                        opts['format'] = fmt
+                        opts.setdefault('merge_output_format', 'mp4')
+                    self._log.info(
+                        'User video quality %s, format: %s',
+                        quality.value,
+                        opts.get('format'),
+                    )
+                    if plan_hook and _is_rutube_url(url):
+                        probe_meta = self._probe_video_meta(opts, resolved_url)
 
             if plan_hook and _is_rutube_url(url):
                 meta = probe_meta or {}
@@ -669,7 +699,11 @@ class MediaDownloader:
                             'duration_seconds': duration,
                             'filesize': filesize,
                             'low_quality': low_format,
-                            'quality_label': '360p' if low_format else 'обычное',
+                            'quality_label': (
+                                quality.label
+                                if quality is not None
+                                else ('360p' if low_format else 'обычное')
+                            ),
                             'no_proxy': not opts.get('proxy'),
                             'eta_hint': _estimate_download_eta_hint(filesize, duration),
                             'duration_label': _format_duration_ru(duration),

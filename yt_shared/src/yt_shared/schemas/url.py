@@ -1,6 +1,6 @@
 from pydantic import ConfigDict
 
-from yt_shared.enums import DownMediaType, TelegramChatType
+from yt_shared.enums import DownMediaType, TelegramChatType, VideoQuality
 from yt_shared.schemas.base import StrictRealBaseModel
 
 
@@ -17,3 +17,4 @@ class URL(StrictRealBaseModel):
     pipeline_log_message_id: int | None = None
     save_to_storage: bool
     download_media_type: DownMediaType
+    video_quality: VideoQuality | None = None

@@ -47,6 +47,20 @@ class DownMediaType(StrChoiceEnum):
     AUDIO_VIDEO = 'AUDIO_VIDEO'
 
 
+class VideoQuality(StrChoiceEnum):
+    """Video quality chosen by the user in Telegram (max height or best)."""
+
+    P360 = '360'
+    P480 = '480'
+    P720 = '720'
+    P1080 = '1080'
+    BEST = 'best'
+
+    @property
+    def label(self) -> str:
+        return 'лучшее' if self is VideoQuality.BEST else f'{self.value}p'
+
+
 class MediaFileType(StrChoiceEnum):
     AUDIO = 'AUDIO'
     VIDEO = 'VIDEO'
