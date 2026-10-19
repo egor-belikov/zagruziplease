@@ -60,7 +60,7 @@ docker exec zagruziplease_postgres pg_dump -U yt -Fc yt > zagruziplease-$(date +
 Часть русских сайтов отдаёт видео только на российские IP. На egorvps (RU, 95.181.212.42) крутится SOCKS5 `gost` — `/root/ruproxy/docker-compose.yml`, порт 18443, логин/пароль в `RU_PROXY` (`envs/secrets.env`). Порт открыт только для IP fantasyvps: правила `DOCKER-USER` восстанавливает `ruproxy-firewall.service`.
 
 - Через прокси идут только хосты из `worker/ru_proxy.py` (matchtv.ru, smotrim.ru, 1tv.ru, ntv.ru, sportbox.ru) и `RU_PROXY_HOSTS`, остальное — напрямую.
-- Матч ТВ (`matchtv.ru/…matchtvvideo_…`): `worker/matchtv_resolver.py` достаёт из страницы плеер Webcaster и через прокси получает HLS-плейлист с `bl.video.matchtv.ru`.
+- Матч ТВ (`matchtv.ru/…matchtvvideo_…`) и Sportbox (`…sportbox.ru/…spbvideo_…`, тот же плеер): `worker/matchtv_resolver.py` достаёт из страницы плеер Webcaster и через прокси получает HLS-плейлист с `bl.video.matchtv.ru`.
 
 ## VK Музыка
 

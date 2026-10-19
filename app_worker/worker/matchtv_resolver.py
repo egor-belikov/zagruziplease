@@ -1,4 +1,4 @@
-"""Resolve matchtv.ru video pages to a direct HLS playlist URL.
+"""Resolve matchtv.ru / sportbox.ru video pages to a direct HLS playlist URL.
 
 Страница → playerUrl (iframe video.matchtv.ru) → data-config фида Webcaster
 (bl.video.matchtv.ru/feed/…) → media XML → <iphone><track> master m3u8.
@@ -55,6 +55,9 @@ def is_matchtv_video_url(url: str) -> bool:
     path = urlsplit(url).path or ''
     if host == 'matchtv.ru':
         return 'matchtvvideo_' in path
+    # Sportbox встраивает тот же плеер Матч ТВ.
+    if host == 'sportbox.ru' or host.endswith('.sportbox.ru'):
+        return 'spbvideo_' in path
     return host == 'video.matchtv.ru' and path.startswith('/iframe/')
 
 
@@ -105,7 +108,7 @@ def resolve_if_matchtv(url: str, log: logging.Logger) -> MatchTvResolved | None:
     proxy = get_ru_proxy()
     with yt_dlp.YoutubeDL({'proxy': proxy or '', 'quiet': True}) as ydl:
         iframe_url = url
-        if _host(url) == 'matchtv.ru':
+        if _host(url) != 'video.matchtv.ru':
             page = _fetch(ydl, url, 'страница')
             m = _IFRAME_RE.search(page)
             if not m:
