@@ -22,6 +22,8 @@ from yt_shared.utils.common import format_bytes, gen_random_str
 from yt_shared.utils.file import file_size, list_files_human, remove_dir
 
 from worker.bunkr_resolver import resolve_if_bunkr
+from worker.matchtv_resolver import resolve_if_matchtv
+from worker.ru_proxy import ru_proxy_for
 from worker.sports_ru_resolver import resolve_if_sports_ru
 from worker.veed_resolver import resolve_if_veed
 from worker.vk_music_resolver import resolve_if_vk_audio
@@ -624,6 +626,7 @@ class MediaDownloader:
         bunker_res = resolve_if_bunkr(url, self._log)
         veed_res = resolve_if_veed(url, self._log)
         sports_ru_res = resolve_if_sports_ru(url, self._log)
+        matchtv_res = resolve_if_matchtv(url, self._log)
         vk_res = resolve_if_vk_audio(url, self._log)
         resolved_url = url
         try:
@@ -639,6 +642,9 @@ class MediaDownloader:
         elif sports_ru_res is not None:
             resolved_url = sports_ru_res.direct_url
             self._log.info('Sports.ru page %s resolved to HLS playlist URL', url)
+        elif matchtv_res is not None:
+            resolved_url = matchtv_res.direct_url
+            self._log.info('Match TV page %s resolved to HLS playlist URL', url)
         elif vk_res is not None:
             resolved_url = vk_res.direct_url
             self._log.info('VK audio %s resolved to stream URL', url)
@@ -655,6 +661,9 @@ class MediaDownloader:
 
             opts = _merge_global_ytdl_opts(dict(ytdl_opts_model.ytdl_opts))
             _maybe_strip_proxy_for_direct_hosts(opts, url, resolved_url)
+            if ru_proxy := ru_proxy_for(url, resolved_url):
+                opts['proxy'] = ru_proxy
+                self._log.info('Using RU proxy for %s', url)
             _maybe_strip_http_chunk_size(opts, url, resolved_url)
             if bunker_res is not None:
                 hdrs = dict(opts.get('http_headers') or {})
@@ -668,6 +677,16 @@ class MediaDownloader:
                 hdrs = dict(opts.get('http_headers') or {})
                 hdrs.update(sports_ru_res.http_headers)
                 opts['http_headers'] = hdrs
+            elif matchtv_res is not None:
+                hdrs = dict(opts.get('http_headers') or {})
+                hdrs.update(matchtv_res.http_headers)
+                opts['http_headers'] = hdrs
+                if matchtv_res.page_title:
+                    name = sanitize_filename(matchtv_res.page_title, restricted=True)
+                    opts['outtmpl'] = {
+                        **opts['outtmpl'],
+                        'default': str(curr_tmp_dir / f'{name[:150].replace("%", "%%")}.%(ext)s'),
+                    }
             elif vk_res is not None:
                 hdrs = dict(opts.get('http_headers') or {})
                 hdrs.update(vk_res.http_headers)
@@ -773,6 +792,8 @@ class MediaDownloader:
                         meta['title'] = veed_res.page_title
                     elif sports_ru_res is not None and sports_ru_res.page_title:
                         meta['title'] = sports_ru_res.page_title
+                    elif matchtv_res is not None and matchtv_res.page_title:
+                        meta['title'] = matchtv_res.page_title
                     elif vk_res is not None:
                         meta['title'] = vk_res.full_title
                         meta['duration'] = vk_res.duration
