@@ -46,13 +46,38 @@ class VkApiError(Exception):
     pass
 
 
+def vk_music_proxy() -> str | None:
+    """RU_PROXY: из-за рубежа ВК прячет лицензионный каталог и не отдаёт mp3."""
+    return (os.environ.get('RU_PROXY') or '').strip() or None
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    proxy = vk_music_proxy()
+    if not proxy:
+        return urllib.request.build_opener()
+    import socks  # noqa: PLC0415
+    from sockshandler import SocksiPyHandler  # noqa: PLC0415
+
+    p = urllib.parse.urlsplit(proxy)
+    return urllib.request.build_opener(
+        SocksiPyHandler(
+            socks.SOCKS5,
+            p.hostname,
+            p.port or 1080,
+            True,
+            urllib.parse.unquote(p.username or '') or None,
+            urllib.parse.unquote(p.password or '') or None,
+        )
+    )
+
+
 def _post_json(url: str, params: dict, headers: dict[str, str]) -> dict:
     req = urllib.request.Request(  # noqa: S310
         url,
         data=urllib.parse.urlencode(params).encode(),
         headers={'User-Agent': USER_AGENT, 'Origin': 'https://vk.ru', **headers},
     )
-    with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # noqa: S310
+    with _opener().open(req, timeout=_TIMEOUT) as resp:
         return json.loads(resp.read().decode('utf-8'))
 
 

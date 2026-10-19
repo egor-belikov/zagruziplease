@@ -20,6 +20,7 @@ from yt_shared.enums import DownMediaType, VideoQuality
 from yt_shared.schemas.media import Audio, DownMedia, InbMediaPayload, Video
 from yt_shared.utils.common import format_bytes, gen_random_str
 from yt_shared.utils.file import file_size, list_files_human, remove_dir
+from yt_shared.vk_music import vk_music_proxy
 
 from worker.bunkr_resolver import resolve_if_bunkr
 from worker.matchtv_resolver import resolve_if_matchtv
@@ -696,6 +697,8 @@ class MediaDownloader:
                 hdrs = dict(opts.get('http_headers') or {})
                 hdrs.update(vk_res.http_headers)
                 opts['http_headers'] = hdrs
+                if vk_proxy := vk_music_proxy():
+                    opts['proxy'] = vk_proxy
                 # Generic extractor would name the file "index"; use "Artist - Title".
                 name = sanitize_filename(vk_res.full_title)[:200].replace('%', '%%')
                 opts['outtmpl'] = {
